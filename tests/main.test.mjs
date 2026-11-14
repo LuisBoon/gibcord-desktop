@@ -182,7 +182,7 @@ test('proces główny GibCorda (atrapa Electrona, Windows)', async t => {
     const other = new WebContents(); const e3 = { sender: other, senderFrame: { url: ORIGIN } }; ipcMain.emit('app:info', e3); assert.equal(e3.returnValue, null);
     assert.equal(await handlers.get('settings:get')(fromApp('file:///C:/x/offline.html')), null);
     const s = await handlers.get('settings:get')(fromApp());
-    assert.deepEqual(s, { autostart: true, autostartAvailable: true, startMinimized: true, closeToTray: true, gameDetection: true, gameDetectionAvailable: true });
+    assert.deepEqual(s, { autostart: true, autostartAvailable: true, startMinimized: true, closeToTray: true, gameDetection: true, gameDetectionAvailable: true, store: false });
   });
 
   await t.test('uprawnienia: mikrofon i ekran tylko dla GibCorda', () => {

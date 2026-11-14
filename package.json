@@ -1,7 +1,7 @@
 {
   "name": "gibcord-desktop",
   "productName": "GibCord",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "GibCord — aplikacja na komputer (Windows)",
   "author": "GibCord <noreply@luisboon.pl>",
   "homepage": "https://gibcord.luisboon.pl",
@@ -80,6 +80,20 @@
         "repo": "gibcord-desktop",
         "releaseType": "release"
       }
-    ]
+    ],
+    "appx": {
+      "identityName": "GibCord.GibCord",
+      "publisher": "CN=04559352-DF71-4AA3-A4CF-B55AA03F9922",
+      "publisherDisplayName": "GibCord",
+      "applicationId": "GibCord",
+      "displayName": "GibCord",
+      "backgroundColor": "#1b1531",
+      "languages": [
+        "pl-PL"
+      ],
+      "addAutoLaunchExtension": true,
+      "showNameOnTiles": false,
+      "artifactName": "GibCord-Store-${version}.${ext}"
+    }
   }
 }

@@ -23,6 +23,10 @@ const ORIGINS = [ORIGIN, ...LEGACY_ORIGINS.filter(o => o !== ORIGIN)];
 const allowed = url => isAllowedOrigin(url, ORIGINS);
 
 const IS_WIN = process.platform === 'win32';
+// Wersja z Microsoft Store (pakiet MSIX): aktualizacje robi Sklep, a autostart to zadanie startowe z manifestu,
+// które użytkownik włącza/wyłącza w Ustawieniach Windows → Aplikacje → Uruchamianie.
+const IS_STORE = !!process.windowsStore;
+const STARTUP_SETTINGS = 'ms-settings:startupapps';
 const DEVTOOLS = process.argv.includes('--devtools');
 const ASSETS = path.join(__dirname, '..', 'assets');
 const asset = (...p) => path.join(ASSETS, ...p);
@@ -288,9 +292,10 @@ function main() {
     const unread = badge.count > 0 || badge.dot;
     return nativeImage.createFromPath(asset(IS_WIN ? (unread ? 'tray-unread.ico' : 'tray.ico') : (unread ? 'tray-unread.png' : 'tray.png')));
   }
-  function autostartOn() { try { return app.getLoginItemSettings({ args: ['--autostart'] }).openAtLogin; } catch { return false; } }
+  function autostartOn() { if (IS_STORE) return false; try { return app.getLoginItemSettings({ args: ['--autostart'] }).openAtLogin; } catch { return false; } }
   function setAutostart(on) {
     if (!app.isPackaged) { log.info('Autostart pominięty (wersja deweloperska)'); return; }
+    if (IS_STORE) { shell.openExternal(STARTUP_SETTINGS); return; }
     app.setLoginItemSettings({ openAtLogin: !!on, args: ['--autostart'] });
   }
   function buildTrayMenu() {
@@ -301,7 +306,8 @@ function main() {
       { label: 'Wycisz mikrofon', type: 'checkbox', checked: voice.muted, click: () => send('tray', 'mute') },
       { label: 'Wygłusz (nic nie słyszę)', type: 'checkbox', checked: voice.deaf, click: () => send('tray', 'deaf') },
       { type: 'separator' },
-      { label: 'Uruchamiaj razem z Windows', type: 'checkbox', checked: autostartOn(), enabled: app.isPackaged, click: i => { setAutostart(i.checked); buildTrayMenu(); } },
+      IS_STORE ? { label: 'Uruchamianie z Windows… (Ustawienia)', click: () => shell.openExternal(STARTUP_SETTINGS) }
+        : { label: 'Uruchamiaj razem z Windows', type: 'checkbox', checked: autostartOn(), enabled: app.isPackaged, click: i => { setAutostart(i.checked); buildTrayMenu(); } },
       { label: 'Ustawienia aplikacji', click: () => { showWindow(); send('tray', 'settings'); } },
       update.state === 'downloaded'
         ? { label: `Uruchom ponownie i zaktualizuj (${update.version})`, click: installUpdate }
@@ -412,6 +418,7 @@ function main() {
   /* ---------- aktualizacje ---------- */
   let updater = null;
   function setupUpdater() {
+    if (IS_STORE) { log.info('Wersja ze Sklepu — aktualizacje przez Microsoft Store'); return; }
     if (!app.isPackaged && !process.env.GIBCORD_UPDATE_FEED) return;
     try { updater = require('electron-updater').autoUpdater; } catch (e) { log.error('electron-updater', e); return; }
     updater.logger = { info: m => log.info('[aktualizacje]', String(m)), warn: m => log.warn('[aktualizacje]', String(m)), error: m => log.error('[aktualizacje]', String(m)), debug: () => {} };
@@ -470,7 +477,7 @@ function main() {
   ipcMain.handle('state', e => fromApp(e) ? { game: currentGame, update: { ...update }, settings: publicSettings(), window: winState() } : null);
   ipcMain.handle('update:check', e => fromApp(e) ? checkUpdates(true) : null);
   ipcMain.on('update:install', e => { if (fromApp(e)) installUpdate(); });
-  function publicSettings() { const s = store.get(); return { autostart: autostartOn(), autostartAvailable: app.isPackaged, startMinimized: s.startMinimized, closeToTray: s.closeToTray, gameDetection: s.gameDetection, gameDetectionAvailable: IS_WIN }; }
+  function publicSettings() { const s = store.get(); return { autostart: autostartOn(), autostartAvailable: app.isPackaged && !IS_STORE, store: IS_STORE, startMinimized: s.startMinimized, closeToTray: s.closeToTray, gameDetection: s.gameDetection, gameDetectionAvailable: IS_WIN }; }
   ipcMain.handle('settings:get', e => fromApp(e) ? publicSettings() : null);
   ipcMain.handle('settings:set', (e, p) => {
     if (!fromApp(e) || !p || typeof p !== 'object') return null;
@@ -494,7 +501,7 @@ function main() {
     Menu.setApplicationMenu(null);
     setupSession(session.fromPartition('persist:gibcord'));
     // Pierwsze uruchomienie zainstalowanej aplikacji: włącz autostart (jak Discord). Później decyduje użytkownik.
-    if (app.isPackaged && !store.get().autostartInit) { setAutostart(true); store.set({ autostartInit: true }); }
+    if (app.isPackaged && !IS_STORE && !store.get().autostartInit) { setAutostart(true); store.set({ autostartInit: true }); }
     createWindow();
     createTray();
     const link = findDeepLinkArg(process.argv);
