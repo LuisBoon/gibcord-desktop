@@ -76,7 +76,7 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "OWNER",
+        "owner": "LuisBoon",
         "repo": "gibcord-desktop",
         "releaseType": "release"
       }
