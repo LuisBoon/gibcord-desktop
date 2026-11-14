@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src file:">
+<title>Udostępnij ekran</title>
+<style>
+:root{--tx:#f6f2fb;--mu:rgba(246,242,251,.64);--gl:rgba(255,255,255,.075);--gl2:rgba(255,255,255,.13);--line:rgba(255,255,255,.1);--acg:linear-gradient(135deg,#ffb98f,#e8708f);--ac:#ffb98f;--acx:#2a1630;--danger:#ff6b81}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{font:14px/1.45 'Segoe UI',system-ui,sans-serif;color:var(--tx);display:flex;flex-direction:column;user-select:none;
+  background:radial-gradient(55% 75% at 8% 8%,#1d6b74 0%,transparent 62%),radial-gradient(50% 70% at 92% 14%,#6b2d7c 0%,transparent 62%),radial-gradient(60% 60% at 70% 105%,#c6653f 0%,transparent 60%),#1b1531}
+header{padding:18px 22px 0}
+h1{margin:0 0 12px;font-size:19px;font-weight:700}
+.tabs{display:flex;gap:6px}
+.tabs button{border:0;border-radius:999px;padding:7px 16px;font:inherit;font-weight:600;color:var(--mu);background:var(--gl);cursor:pointer}
+.tabs button.on{color:var(--acx);background:var(--acg)}
+main{flex:1;overflow:auto;padding:16px 22px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+.src{border:2px solid transparent;border-radius:14px;background:var(--gl);padding:8px;cursor:pointer;text-align:left;color:inherit;font:inherit;display:flex;flex-direction:column;gap:7px;min-width:0}
+.src:hover{background:var(--gl2)}
+.src.on{border-color:var(--ac);background:var(--gl2)}
+.src:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.th{aspect-ratio:16/9;border-radius:9px;background:#0d0a18 center/contain no-repeat;display:block;width:100%}
+.nm{display:flex;align-items:center;gap:7px;min-width:0}
+.nm img{width:18px;height:18px;flex:none}
+.nm span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.empty{color:var(--mu);text-align:center;padding:50px 0}
+footer{display:flex;align-items:center;gap:12px;padding:14px 22px;border-top:1px solid var(--line);background:rgba(10,6,24,.28)}
+.aud{display:flex;align-items:flex-start;gap:9px;flex:1;min-width:0;cursor:pointer}
+.aud input{margin:3px 0 0;width:17px;height:17px;accent-color:#e8708f;flex:none}
+.aud small{display:block;color:var(--mu);font-size:12px}
+.sp{flex:1}
+.aud:not([hidden])+.sp{display:none}
+.btn{border:0;border-radius:12px;padding:10px 18px;font:inherit;font-weight:700;cursor:pointer}
+.btn.ghost{background:var(--gl2);color:var(--tx)}
+.btn.pri{background:var(--acg);color:var(--acx)}
+.btn:disabled{opacity:.45;cursor:default}
+</style>
+</head>
+<body>
+<header>
+  <h1>Co chcesz pokazać?</h1>
+  <div class="tabs" role="tablist"><button type="button" data-k="screen" class="on">Ekrany</button><button type="button" data-k="window">Okna</button></div>
+</header>
+<main><div class="grid" id="grid"><p class="empty">Wczytywanie…</p></div></main>
+<footer>
+  <label class="aud" id="aud" hidden><input type="checkbox" id="audio"><span>Udostępnij też dźwięk z komputera<small>Widzowie usłyszą wszystko, co gra komputer — także głosy z tej rozmowy, więc mogą słyszeć siebie z opóźnieniem.</small></span></label>
+  <span class="sp" id="sp"></span>
+  <button type="button" class="btn ghost" id="cancel">Anuluj</button>
+  <button type="button" class="btn pri" id="ok" disabled>Udostępnij</button>
+</footer>
+<script src="picker.js"></script>
+</body>
+</html>

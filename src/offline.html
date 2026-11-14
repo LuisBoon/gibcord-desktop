@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src file:; style-src 'unsafe-inline'; script-src file:">
+<title>GibCord — brak połączenia</title>
+<style>
+html,body{height:100%;margin:0}
+body{font:15px/1.5 'Segoe UI',system-ui,sans-serif;color:#f6f2fb;display:grid;place-items:center;text-align:center;user-select:none;
+  background:radial-gradient(55% 75% at 8% 8%,#1d6b74 0%,transparent 62%),radial-gradient(50% 70% at 92% 14%,#6b2d7c 0%,transparent 62%),radial-gradient(60% 60% at 70% 105%,#c6653f 0%,transparent 60%),#1b1531}
+.box{max-width:420px;padding:24px}
+.logo{display:block;width:96px;height:96px;margin:0 auto 18px;filter:drop-shadow(0 10px 30px rgba(232,112,143,.35))}
+h1{font-size:21px;margin:0 0 8px}
+p{margin:0 0 20px;color:rgba(246,242,251,.64)}
+small{display:block;margin-top:16px;color:rgba(246,242,251,.42);font-size:12px}
+button{border:0;border-radius:12px;padding:11px 22px;font:inherit;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#ffb98f,#e8708f);color:#2a1630}
+</style>
+</head>
+<body>
+<div class="box">
+  <img class="logo" src="../assets/icon.png" alt="">
+  <h1>Nie mogę połączyć się z GibCordem</h1>
+  <p>Sprawdź internet. Spróbuję ponownie sam za <b id="sec">15</b> s.</p>
+  <button type="button" id="retry">Spróbuj teraz</button>
+  <small id="err"></small>
+</div>
+<script src="offline.js"></script>
+</body>
+</html>
