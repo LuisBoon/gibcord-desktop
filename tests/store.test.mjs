@@ -38,6 +38,7 @@ class BrowserWindow extends EventEmitter {
   show() { this.visible = true; } hide() { this.visible = false; this.focused = false; }
   getBounds() { return { x: 10, y: 10, width: 1200, height: 800 }; }
   flashFrame(on) { this.flashed = on; }
+  setTitleBarOverlay(o) { this.tbo = o; } setBackgroundColor(c) { this.bgc = c; }
   setOverlayIcon(img, desc) { this.overlay = img ? img.path : null; this.overlayDesc = desc; }
   loadURL(u) { this.loaded.push(u); } loadFile(f, o) { this.loaded.push({ file: f, query: o && o.query }); }
   close() { const e = ev(); this.emit('close', e); if (!e.defaultPrevented) { this.destroyed = true; this.emit('closed'); } }
@@ -74,7 +75,8 @@ let resolveReady; app.ready = { promise: new Promise(r => { resolveReady = r; })
 const electron = {
   app, BrowserWindow, Tray, ipcMain,
   Menu: { buildFromTemplate: items => { const m = { items, popup() { calls.menus.push(items); } }; return m; }, setApplicationMenu() {} },
-  nativeImage: { createFromPath: p => ({ path: p, isEmpty: () => !existsSync(p) }) },
+  nativeImage: { createFromPath: p => ({ path: p, isEmpty: () => !existsSync(p), resize() { return this; }, toDataURL: () => 'data:image/png;base64,GIB' }) },
+  nativeTheme: { themeSource: 'system' },
   shell: { openExternal: u => { calls.external.push(u); return Promise.resolve(); }, showItemInFolder() {} },
   session: { fromPartition: () => ses },
   desktopCapturer: { getSources: async () => [

@@ -12,13 +12,17 @@ const DEFAULTS = {
   trayHintShown: false,    // czy pokazaliśmy już dymek „GibCord działa w tle”
   autostartInit: false,    // czy przy pierwszym uruchomieniu włączyliśmy już autostart
   zoom: 0,                 // powiększenie strony (Ctrl + / Ctrl -)
+  tbBg: '#1b1531',         // kolor paska okna — ostatni motyw GibCorda (żeby od startu był właściwy)
+  tbFg: '#f6f2fb',         // kolor napisu i przycisków na pasku
 };
+const HEX = /^#[0-9a-f]{6}$/i;
 
 function sanitize(obj) {
   const out = Object.assign({}, DEFAULTS);
   if (!obj || typeof obj !== 'object') return out;
   for (const k of ['closeToTray', 'startMinimized', 'gameDetection', 'trayHintShown', 'maximized', 'autostartInit']) if (typeof obj[k] === 'boolean') out[k] = obj[k];
   if (Number.isFinite(obj.zoom)) out.zoom = Math.max(-3, Math.min(4, obj.zoom));
+  for (const k of ['tbBg', 'tbFg']) if (typeof obj[k] === 'string' && HEX.test(obj[k])) out[k] = obj[k].toLowerCase();
   const b = obj.bounds;
   if (b && ['x', 'y', 'width', 'height'].every(k => Number.isFinite(b[k])) && b.width >= 400 && b.height >= 300 && b.width < 20000 && b.height < 20000) out.bounds = { x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) };
   return out;

@@ -4,7 +4,7 @@
  * a do tego dokłada to, czego przeglądarka nie umie: „naciśnij, by mówić” w każdej aplikacji,
  * ikonę w zasobniku, autostart, linki gibcord://, wykrywanie gier i samoczynne aktualizacje.
  */
-const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, session, desktopCapturer, screen, clipboard, Notification } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, ipcMain, shell, session, desktopCapturer, screen, clipboard, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execFile } = require('child_process');
@@ -28,6 +28,9 @@ const IS_WIN = process.platform === 'win32';
 const IS_STORE = !!process.windowsStore;
 const STARTUP_SETTINGS = 'ms-settings:startupapps';
 const DEVTOOLS = process.argv.includes('--devtools');
+// Pasek okna w kolorze motywu: system rysuje tylko przyciski — ▢ ✕ (titleBarOverlay), resztę paska dokłada preload.js.
+const TITLEBAR = IS_WIN || process.env.GIBCORD_TITLEBAR === '1';
+const TB_H = 30; // wysokość paska w px strony (przy powiększeniu rośnie razem ze stroną)
 const ASSETS = path.join(__dirname, '..', 'assets');
 const asset = (...p) => path.join(ASSETS, ...p);
 
@@ -82,6 +85,19 @@ function main() {
   function visibleOnSomeDisplay(b) {
     return screen.getAllDisplays().some(d => { const a = d.workArea; return b.x + 80 < a.x + a.width && b.x + b.width - 80 > a.x && b.y + 40 < a.y + a.height && b.y > a.y - 40; });
   }
+
+  /* ---------- pasek okna w kolorze motywu ---------- */
+  const HEX = /^#[0-9a-f]{6}$/i;
+  const titleBarOverlay = () => { const s = store.get(); return { color: s.tbBg, symbolColor: s.tbFg, height: Math.round(TB_H * Math.pow(1.2, s.zoom || 0)) }; };
+  const isLight = hex => { const n = parseInt(hex.slice(1), 16); return (0.2126 * (n >> 16 & 255) + 0.7152 * (n >> 8 & 255) + 0.0722 * (n & 255)) / 255 > 0.6; };
+  // ramki pozostałych okien (podgląd plików, wybór ekranu) i menu systemowe: jasne albo ciemne jak motyw
+  const syncNativeTheme = () => { try { if (TITLEBAR && nativeTheme) nativeTheme.themeSource = isLight(store.get().tbBg) ? 'light' : 'dark'; } catch {} };
+  function applyTitleBar() {
+    if (!TITLEBAR || !win || win.isDestroyed()) return;
+    try { win.setTitleBarOverlay(titleBarOverlay()); } catch (e) { log.warn('setTitleBarOverlay', e && e.message); }
+  }
+  let tbIcon = null; // Gibek dla paska (data: URL), liczony raz
+  const titleBarIcon = () => { if (tbIcon === null) { try { tbIcon = nativeImage.createFromPath(asset('icon.png')).resize({ width: 32, height: 32, quality: 'best' }).toDataURL(); } catch { tbIcon = ''; } } return tbIcon; };
 
   /* ---------- sesja: uprawnienia i udostępnianie ekranu ---------- */
   function setupSession(ses) {
@@ -164,8 +180,9 @@ function main() {
   function createWindow() {
     const st = store.get();
     const opts = {
-      width: 1280, height: 800, minWidth: 420, minHeight: 480, show: false, title: 'GibCord', backgroundColor: '#1b1531',
+      width: 1280, height: 800, minWidth: 420, minHeight: 480, show: false, title: 'GibCord', backgroundColor: TITLEBAR ? st.tbBg : '#1b1531',
       icon: windowIcon(), autoHideMenuBar: true,
+      ...(TITLEBAR ? { titleBarStyle: 'hidden', titleBarOverlay: titleBarOverlay() } : {}),
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'), partition: 'persist:gibcord',
         contextIsolation: true, sandbox: true, nodeIntegration: false, webviewTag: false,
@@ -191,7 +208,7 @@ function main() {
     /* Przy backgroundThrottling:false strona zawsze „widzi się” jako widoczna — więc stan okna podajemy sami
        (powiadomienia na pulpicie i push na telefon zależą od tego, czy GibCord jest na ekranie). */
     const sendWinState = () => { if (win && !win.isDestroyed()) send('window', winState()); };
-    for (const ev of ['show', 'hide', 'minimize', 'restore', 'focus', 'blur']) win.on(ev, sendWinState);
+    for (const ev of ['show', 'hide', 'minimize', 'restore', 'focus', 'blur', 'enter-full-screen', 'leave-full-screen', 'enter-html-full-screen', 'leave-html-full-screen']) win.on(ev, sendWinState);
     wc.on('did-finish-load', sendWinState);
     win.on('close', e => {
       if (quitting || !store.get().closeToTray) return;
@@ -239,7 +256,7 @@ function main() {
       else if (ctrl && k === '0') { e.preventDefault(); setZoom(0); }
       else if (DEVTOOLS && ((ctrl && input.shift && k.toLowerCase() === 'i') || k === 'F12')) { e.preventDefault(); wc.toggleDevTools(); }
     });
-    const setZoom = z => { z = Math.max(-3, Math.min(4, z)); wc.setZoomLevel(z); store.set({ zoom: z }); };
+    const setZoom = z => { z = Math.max(-3, Math.min(4, z)); wc.setZoomLevel(z); store.set({ zoom: z }); applyTitleBar(); };
     wc.on('did-finish-load', () => { const z = store.get().zoom; if (z) wc.setZoomLevel(z); });
 
     /* menu pod prawym przyciskiem (tylko tam, gdzie strona nie ma własnego) */
@@ -257,7 +274,7 @@ function main() {
     win.loadURL(ORIGIN);
     return win;
   }
-  const winState = () => ({ visible: !!(win && !win.isDestroyed() && win.isVisible() && !win.isMinimized()), focused: !!(win && !win.isDestroyed() && win.isFocused()) });
+  const winState = () => ({ visible: !!(win && !win.isDestroyed() && win.isVisible() && !win.isMinimized()), focused: !!(win && !win.isDestroyed() && win.isFocused()), fullscreen: !!(win && !win.isDestroyed() && win.isFullScreen()) });
   const isOfflinePage = url => typeof url === 'string' && url.startsWith('file:') && url.split('?')[0].endsWith('/offline.html');
 
   /* podgląd plików z GibCorda (np. „Otwórz oryginał”) — osobne okno bez dostępu do aplikacji */
@@ -455,7 +472,23 @@ function main() {
   }
 
   /* ---------- komunikacja ze stroną (preload) ---------- */
-  ipcMain.on('app:info', e => { e.returnValue = fromApp(e) ? { version: app.getVersion(), platform: process.platform, arch: process.arch, packaged: app.isPackaged } : null; });
+  ipcMain.on('app:info', e => { e.returnValue = fromApp(e) ? { version: app.getVersion(), platform: process.platform, arch: process.arch, packaged: app.isPackaged, titleBar: TITLEBAR } : null; });
+  // pasek okna: GibCord i strona „brak połączenia” w głównym oknie
+  ipcMain.on('titlebar:info', e => {
+    const url = e && e.senderFrame && e.senderFrame.url;
+    const ok = TITLEBAR && win && !win.isDestroyed() && e.sender === win.webContents && (allowed(url) || isOfflinePage(url));
+    const s = store.get();
+    e.returnValue = ok ? { height: TB_H, bg: s.tbBg, fg: s.tbFg, icon: titleBarIcon(), fullscreen: win.isFullScreen() } : null;
+  });
+  // motyw się zmienił → przyciski okna, tło przy ładowaniu i ramki innych okien w tym samym kolorze
+  ipcMain.on('titlebar', (e, c) => {
+    if (!TITLEBAR || !fromApp(e) || !c || typeof c !== 'object' || typeof c.bg !== 'string' || typeof c.fg !== 'string' || !HEX.test(c.bg) || !HEX.test(c.fg)) return;
+    const bg = c.bg.toLowerCase(), fg = c.fg.toLowerCase(), s = store.get();
+    if (bg === s.tbBg && fg === s.tbFg) return;
+    store.set({ tbBg: bg, tbFg: fg });
+    try { win.setBackgroundColor(bg); } catch {}
+    applyTitleBar(); syncNativeTheme();
+  });
   ipcMain.on('deeplink:ready', e => { if (!fromApp(e)) return; rendererReady = true; while (pendingPaths.length) send('deeplink', pendingPaths.shift()); });
   ipcMain.on('badge', (e, d) => {
     if (!fromApp(e) || !d) return;
@@ -499,6 +532,7 @@ function main() {
   app.whenReady().then(() => {
     appReady = true;
     Menu.setApplicationMenu(null);
+    syncNativeTheme();
     setupSession(session.fromPartition('persist:gibcord'));
     // Pierwsze uruchomienie zainstalowanej aplikacji: włącz autostart (jak Discord). Później decyduje użytkownik.
     if (app.isPackaged && !IS_STORE && !store.get().autostartInit) { setAutostart(true); store.set({ autostartInit: true }); }

@@ -38,6 +38,7 @@ class BrowserWindow extends EventEmitter {
   show() { this.visible = true; } hide() { this.visible = false; this.focused = false; }
   getBounds() { return { x: 10, y: 10, width: 1200, height: 800 }; }
   flashFrame(on) { this.flashed = on; }
+  setTitleBarOverlay(o) { this.tbo = o; } setBackgroundColor(c) { this.bgc = c; }
   setOverlayIcon(img, desc) { this.overlay = img ? img.path : null; this.overlayDesc = desc; }
   loadURL(u) { this.loaded.push(u); } loadFile(f, o) { this.loaded.push({ file: f, query: o && o.query }); }
   close() { const e = ev(); this.emit('close', e); if (!e.defaultPrevented) { this.destroyed = true; this.emit('closed'); } }
@@ -74,7 +75,8 @@ let resolveReady; app.ready = { promise: new Promise(r => { resolveReady = r; })
 const electron = {
   app, BrowserWindow, Tray, ipcMain,
   Menu: { buildFromTemplate: items => { const m = { items, popup() { calls.menus.push(items); } }; return m; }, setApplicationMenu() {} },
-  nativeImage: { createFromPath: p => ({ path: p, isEmpty: () => !existsSync(p) }) },
+  nativeImage: { createFromPath: p => ({ path: p, isEmpty: () => !existsSync(p), resize() { return this; }, toDataURL: () => 'data:image/png;base64,GIB' }) },
+  nativeTheme: { themeSource: 'system' },
   shell: { openExternal: u => { calls.external.push(u); return Promise.resolve(); }, showItemInFolder() {} },
   session: { fromPartition: () => ses },
   desktopCapturer: { getSources: async () => [
@@ -183,6 +185,36 @@ test('proces główny GibCorda (atrapa Electrona, Windows)', async t => {
     assert.equal(await handlers.get('settings:get')(fromApp('file:///C:/x/offline.html')), null);
     const s = await handlers.get('settings:get')(fromApp());
     assert.deepEqual(s, { autostart: true, autostartAvailable: true, startMinimized: true, closeToTray: true, gameDetection: true, gameDetectionAvailable: true, store: false });
+  });
+
+  await t.test('pasek okna w kolorze motywu: przyciski systemowe, kolor ze strony, powiększenie', () => {
+    assert.equal(win.opts.titleBarStyle, 'hidden');
+    assert.deepEqual(win.opts.titleBarOverlay, { color: '#1b1531', symbolColor: '#f6f2fb', height: 30 });
+    assert.equal(win.opts.backgroundColor, '#1b1531');
+    assert.equal(electron.nativeTheme.themeSource, 'dark');
+    const info = (url, sender = wc) => { const e = { sender, senderFrame: { url } }; ipcMain.emit('titlebar:info', e); return e.returnValue; };
+    assert.deepEqual(info(ORIGIN + '/'), { height: 30, bg: '#1b1531', fg: '#f6f2fb', icon: 'data:image/png;base64,GIB', fullscreen: false });
+    assert.equal(info('file:///C:/GibCord/resources/app.asar/src/offline.html?u=x').height, 30, 'strona „brak połączenia” też ma pasek');
+    assert.equal(info('https://evil.example/'), null);
+    assert.equal(info(ORIGIN, new WebContents()), null, 'tylko główne okno');
+    // motyw „Jasny”
+    ipcMain.emit('titlebar', fromApp(), { bg: '#F5F2F9', fg: '#1f1b2b' });
+    assert.deepEqual(win.tbo, { color: '#f5f2f9', symbolColor: '#1f1b2b', height: 30 });
+    assert.equal(win.bgc, '#f5f2f9'); assert.equal(electron.nativeTheme.themeSource, 'light');
+    assert.equal(info(ORIGIN).bg, '#f5f2f9', 'zapamiętany na następny start');
+    // śmieci i obce strony nic nie zmieniają
+    win.tbo = null;
+    ipcMain.emit('titlebar', fromApp(), { bg: 'red; x', fg: '#000000' });
+    ipcMain.emit('titlebar', fromApp('https://evil.example/'), { bg: '#000000', fg: '#ffffff' });
+    ipcMain.emit('titlebar', fromApp(), null);
+    ipcMain.emit('titlebar', fromApp(), { bg: { toString: () => '#000000' }, fg: '#ffffff' });
+    assert.equal(win.tbo, null);
+    // Ctrl + : pasek rośnie razem ze stroną
+    const key = k => wc.emit('before-input-event', ev(), { type: 'keyDown', key: k, control: true });
+    key('='); assert.equal(win.tbo.height, Math.round(30 * Math.pow(1.2, 0.5)));
+    key('0'); assert.equal(win.tbo.height, 30);
+    ipcMain.emit('titlebar', fromApp(), { bg: '#1b1531', fg: '#f6f2fb' });
+    assert.equal(electron.nativeTheme.themeSource, 'dark');
   });
 
   await t.test('uprawnienia: mikrofon i ekran tylko dla GibCorda', () => {
@@ -297,10 +329,10 @@ test('proces główny GibCorda (atrapa Electrona, Windows)', async t => {
 
   await t.test('zamknięcie chowa do zasobnika (raz dymek), stan okna idzie do strony', async () => {
     win.focused = true; win.emit('blur'); win.focused = false; win.emit('blur');
-    assert.deepEqual(wc.lastSent('window'), { visible: true, focused: false });
+    assert.deepEqual(wc.lastSent('window'), { visible: true, focused: false, fullscreen: false });
     win.close(); assert.equal(win.destroyed, false); assert.equal(win.visible, false); assert.equal(calls.balloons.length, 1);
-    win.emit('hide'); assert.deepEqual(wc.lastSent('window'), { visible: false, focused: false });
-    assert.deepEqual((await handlers.get('state')(fromApp())).window, { visible: false, focused: false });
+    win.emit('hide'); assert.deepEqual(wc.lastSent('window'), { visible: false, focused: false, fullscreen: false });
+    assert.deepEqual((await handlers.get('state')(fromApp())).window, { visible: false, focused: false, fullscreen: false });
     win.show(); win.close(); assert.equal(calls.balloons.length, 1);
     win.show();
   });

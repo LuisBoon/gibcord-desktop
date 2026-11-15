@@ -147,6 +147,8 @@ test('settings: wartości domyślne, walidacja i zapis na dysk', async () => {
   assert.equal(s.gameDetection, false);
   assert.equal(s.bounds, null);
   assert.equal(s.zoom, 4);
+  assert.equal(sanitize({ tbBg: '#ABCDEF', tbFg: 'url(x)' }).tbBg, '#abcdef');
+  assert.equal(sanitize({ tbFg: 'url(x)' }).tbFg, '#f6f2fb');
   assert.equal(s.evil, undefined);
   const dir = mkdtempSync(join(tmpdir(), 'gc-set-'));
   try {

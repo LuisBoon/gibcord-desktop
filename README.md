@@ -13,6 +13,7 @@ a aplikacja dokłada to, czego przeglądarka nie potrafi:
 | **W co grasz** | Co 15 s `tasklist` porównywany z listą gier z serwera (`GET /api/games/detectable`, odświeżana co 6 h, kopia na dysku). Gra trafia na serwer przez `/ws?client=desktop` (`game_set` / `game_clear`). Do wyłączenia w ustawieniach. |
 | **Udostępnianie ekranu** | Własne okno wyboru ekranu/okna z miniaturami i opcją dźwięku z komputera. |
 | **Aktualizacje** | Same się pobierają z wydań na GitHubie (electron-updater) i instalują przy ponownym uruchomieniu; strona pokazuje pasek „Uruchom ponownie”. |
+| **Pasek okna w kolorze motywu** | Zamiast białej ramki Windows: cienki pasek z Gibkiem, który zmienia kolor razem z motywem GibCorda. Przyciski — ▢ ✕ są systemowe (`titleBarOverlay`, działa menu przyciągania z Windows 11), resztę paska dokłada `src/preload.js` na podstawie `<meta name="theme-color">`; strona przesuwa okienka pod pasek (`html.gctb` w `app.css`). Ostatni kolor jest zapamiętany na następny start. |
 | **Brak internetu** | Zamiast białego okna — ekran „Nie mogę połączyć się z GibCordem” z ponawianiem co 15 s. |
 
 Po stronie strony całą obsługę robi `js/desktop.js` (most `window.gibcordDesktop` z `src/preload.js`).
