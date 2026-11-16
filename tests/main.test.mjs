@@ -91,6 +91,17 @@ const hook = Object.assign(new EventEmitter(), { start() { calls.hookStart++; },
 const UiohookKey = { V: 47, Ctrl: 29, Space: 57 };
 const updater = Object.assign(new EventEmitter(), { checks: 0, async checkForUpdates() { this.checks++; }, quitAndInstall() { calls.quitAndInstall++; }, setFeedURL() {} });
 let tasklistOut = '"explorer.exe","1","Console","1","1 K"';
+/* pomocnik muzyki (PowerShell): atrapa procesu — na prawdziwym Windows test nie może uruchamiać powershell.exe, bo proces trzymałby test bez końca */
+const spawned = [];
+const fakeSpawn = (cmd, args, opts) => {
+  const ch = new EventEmitter();
+  ch.stdout = Object.assign(new EventEmitter(), { setEncoding() {} });
+  ch.stderr = new EventEmitter();
+  ch.cmd = cmd; ch.args = args; ch.opts = opts; ch.killed = false;
+  ch.kill = () => { ch.killed = true; setImmediate(() => ch.emit('exit', null)); };
+  spawned.push(ch);
+  return ch;
+};
 const fakeExecFile = (cmd, args, opts, cb) => { setImmediate(() => cb(null, args.includes('/v') ? '"javaw.exe","7","Console","1","9 K","Running","PC\\\\u","0:00:01","Minecraft 1.21"' : tasklistOut)); };
 
 const origLoad = Module._load;
@@ -98,7 +109,7 @@ Module._load = function (request, parent, isMain) {
   if (request === 'electron') return electron;
   if (request === 'uiohook-napi') return { uIOhook: hook, UiohookKey };
   if (request === 'electron-updater') return { autoUpdater: updater };
-  if (request === 'child_process' && parent && parent.filename === MAIN) return { ...origLoad.call(this, request, parent, isMain), execFile: fakeExecFile };
+  if (request === 'child_process' && parent && parent.filename === MAIN) return { ...origLoad.call(this, request, parent, isMain), execFile: fakeExecFile, spawn: fakeSpawn };
   return origLoad.apply(this, arguments);
 };
 
@@ -325,6 +336,30 @@ test('proces główny GibCorda (atrapa Electrona, Windows)', async t => {
     await handlers.get('settings:set')(fromApp(), { gameDetection: false });
     assert.equal(wc.lastSent('game'), null);
     assert.deepEqual((await handlers.get('state')(fromApp())).game, null);
+  });
+
+  await t.test('muzyka: pomocnik PowerShell, utwór do strony, wyłączenie', async () => {
+    assert.equal(spawned.length, 1, 'pomocnik uruchomiony raz (6 s po starcie)');
+    const ch = spawned[0];
+    assert.equal(ch.cmd, 'powershell.exe'); assert.equal(ch.opts.windowsHide, true);
+    assert.equal(ch.opts.env.GIBCORD_PARENT_PID, String(process.pid));
+    assert.ok(ch.args.includes('-EncodedCommand'));
+    const now = Date.now();
+    ch.stdout.emit('data', '{"ready":true,"smtc":true}\n{"src":"smtc","title":"Arahja","artist":"Kult","album":"Kult","playing":true,"pos":30000,');
+    ch.stdout.emit('data', `"dur":200000,"upd":${now},"now":${now}}\n`);
+    const m = wc.lastSent('music');
+    assert.equal(m.artists, 'Kult'); assert.equal(m.title, 'Arahja'); assert.equal(m.durationMs, 200000);
+    assert.equal(m.startedAt, now - 30000);
+    assert.deepEqual((await handlers.get('state')(fromApp())).music, m);
+    const s = await handlers.get('settings:get')(fromApp());
+    assert.equal(s.musicDetection, true); assert.equal(s.musicDetectionAvailable, true);
+    await handlers.get('settings:set')(fromApp(), { musicDetection: false });
+    assert.equal(ch.killed, true, 'wyłączenie zatrzymuje pomocnika');
+    assert.equal(wc.lastSent('music'), null);
+    await tick(); mock.timers.tick(31000); await tick();
+    assert.equal(spawned.length, 1, 'po wyłączeniu nie wstaje sam');
+    await handlers.get('settings:set')(fromApp(), { musicDetection: true });
+    assert.equal(spawned.length, 2, 'włączenie uruchamia pomocnika od nowa');
   });
 
   await t.test('zamknięcie chowa do zasobnika (raz dymek), stan okna idzie do strony', async () => {

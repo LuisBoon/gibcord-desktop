@@ -35,6 +35,7 @@ jobs:
         run: npm ci
 
       - name: Testy
+        timeout-minutes: 10 # zawieszony test nie może blokować wydania przez 30 min
         run: npm test
 
       - name: Sprawdzenie konfiguracji
