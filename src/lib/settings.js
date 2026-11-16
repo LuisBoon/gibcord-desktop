@@ -9,7 +9,7 @@ const DEFAULTS = {
   closeToTray: true,       // zamknięcie okna chowa do zasobnika
   startMinimized: true,    // przy autostarcie startuj schowany
   gameDetection: true,     // wykrywanie gier
-  musicDetection: true,    // „czego słuchasz” — Spotify na tym komputerze (1.0.4)
+  musicDetection: true,    // „czego słuchasz” — Spotify na tym komputerze (1.0.5)
   trayHintShown: false,    // czy pokazaliśmy już dymek „GibCord działa w tle”
   autostartInit: false,    // czy przy pierwszym uruchomieniu włączyliśmy już autostart
   zoom: 0,                 // powiększenie strony (Ctrl + / Ctrl -)
