@@ -9,6 +9,7 @@ const DEFAULTS = {
   closeToTray: true,       // zamknięcie okna chowa do zasobnika
   startMinimized: true,    // przy autostarcie startuj schowany
   gameDetection: true,     // wykrywanie gier
+  musicDetection: true,    // „czego słuchasz” — Spotify na tym komputerze (1.0.4)
   trayHintShown: false,    // czy pokazaliśmy już dymek „GibCord działa w tle”
   autostartInit: false,    // czy przy pierwszym uruchomieniu włączyliśmy już autostart
   zoom: 0,                 // powiększenie strony (Ctrl + / Ctrl -)
@@ -20,7 +21,7 @@ const HEX = /^#[0-9a-f]{6}$/i;
 function sanitize(obj) {
   const out = Object.assign({}, DEFAULTS);
   if (!obj || typeof obj !== 'object') return out;
-  for (const k of ['closeToTray', 'startMinimized', 'gameDetection', 'trayHintShown', 'maximized', 'autostartInit']) if (typeof obj[k] === 'boolean') out[k] = obj[k];
+  for (const k of ['closeToTray', 'startMinimized', 'gameDetection', 'musicDetection', 'trayHintShown', 'maximized', 'autostartInit']) if (typeof obj[k] === 'boolean') out[k] = obj[k];
   if (Number.isFinite(obj.zoom)) out.zoom = Math.max(-3, Math.min(4, obj.zoom));
   for (const k of ['tbBg', 'tbFg']) if (typeof obj[k] === 'string' && HEX.test(obj[k])) out[k] = obj[k].toLowerCase();
   const b = obj.bounds;

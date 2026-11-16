@@ -7,12 +7,13 @@
 const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, ipcMain, shell, session, desktopCapturer, screen, clipboard, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const { createLogger } = require('./lib/log');
 const { createStore } = require('./lib/settings');
 const { parseDeepLink, findDeepLinkArg } = require('./lib/deeplink');
 const { resolveBinding, matches } = require('./lib/keymap');
 const games = require('./lib/games');
+const music = require('./lib/music');
 const { originOf, isAllowedOrigin, appPathFor } = require('./lib/origins');
 
 /* ---------- adres ---------- */
@@ -432,6 +433,53 @@ function main() {
     setTimeout(scanGames, 8000);
   }
 
+  /* ---------- muzyka: co gra w Spotify (lib/music.js) ---------- */
+  let currentMusic = null, musicProc = null, musicRestarts = [], musicTimer = null;
+  const tracker = music.createTracker();
+  function setMusic(m) {
+    if (m === undefined) return;
+    currentMusic = m;
+    log.info(m ? `Muzyka: ${m.artists} - ${m.title}${m.startedAt ? '' : ' (bez pozycji)'}` : 'Muzyka: brak');
+    send('music', currentMusic);
+  }
+  function startMusic() {
+    if (!IS_WIN || musicProc || !store.get().musicDetection) return;
+    let child;
+    try {
+      child = spawn('powershell.exe', music.helperArgs(), { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, GIBCORD_PARENT_PID: String(process.pid) } });
+    } catch (e) { log.warn('Muzyka: nie da się uruchomić PowerShell', e.message); return; }
+    musicProc = child;
+    let buf = '';
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', d => {
+      buf += d; if (buf.length > 1e5) buf = '';
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+        if (!line) continue;
+        let j; try { j = JSON.parse(line); } catch { continue; }
+        if (j.ready) { log.info(`Muzyka: pomocnik działa (${j.smtc ? 'sterowanie multimediami Windows' : 'tytuł okna'})`); continue; }
+        setMusic(tracker.update(music.parseSample(j)));
+      }
+    });
+    child.stderr.on('data', d => log.warn('Muzyka (PowerShell):', String(d).slice(0, 300)));
+    child.on('error', e => log.warn('Muzyka: PowerShell', e.message));
+    child.on('exit', code => {
+      if (musicProc === child) musicProc = null;
+      if (quitting || !store.get().musicDetection) return;
+      const now = Date.now(); musicRestarts = musicRestarts.filter(t => now - t < 3600e3);
+      if (musicRestarts.length >= 5) { log.warn(`Muzyka: pomocnik kończy się za często (kod ${code}), wyłączam do restartu aplikacji`); setMusic(tracker.reset()); return; }
+      musicRestarts.push(now);
+      clearTimeout(musicTimer); musicTimer = setTimeout(startMusic, 30000);
+    });
+  }
+  function stopMusic() {
+    clearTimeout(musicTimer);
+    const p = musicProc; musicProc = null;
+    if (p) try { p.kill(); } catch {}
+    setMusic(tracker.reset());
+  }
+
   /* ---------- aktualizacje ---------- */
   let updater = null;
   function setupUpdater() {
@@ -507,25 +555,26 @@ function main() {
     refreshHook();
     if (menuChanged) buildTrayMenu();
   });
-  ipcMain.handle('state', e => fromApp(e) ? { game: currentGame, update: { ...update }, settings: publicSettings(), window: winState() } : null);
+  ipcMain.handle('state', e => fromApp(e) ? { game: currentGame, music: currentMusic, update: { ...update }, settings: publicSettings(), window: winState() } : null);
   ipcMain.handle('update:check', e => fromApp(e) ? checkUpdates(true) : null);
   ipcMain.on('update:install', e => { if (fromApp(e)) installUpdate(); });
-  function publicSettings() { const s = store.get(); return { autostart: autostartOn(), autostartAvailable: app.isPackaged && !IS_STORE, store: IS_STORE, startMinimized: s.startMinimized, closeToTray: s.closeToTray, gameDetection: s.gameDetection, gameDetectionAvailable: IS_WIN }; }
+  function publicSettings() { const s = store.get(); return { autostart: autostartOn(), autostartAvailable: app.isPackaged && !IS_STORE, store: IS_STORE, startMinimized: s.startMinimized, closeToTray: s.closeToTray, gameDetection: s.gameDetection, gameDetectionAvailable: IS_WIN, musicDetection: s.musicDetection, musicDetectionAvailable: IS_WIN }; }
   ipcMain.handle('settings:get', e => fromApp(e) ? publicSettings() : null);
   ipcMain.handle('settings:set', (e, p) => {
     if (!fromApp(e) || !p || typeof p !== 'object') return null;
     const patch = {};
-    for (const k of ['startMinimized', 'closeToTray', 'gameDetection']) if (typeof p[k] === 'boolean') patch[k] = p[k];
+    for (const k of ['startMinimized', 'closeToTray', 'gameDetection', 'musicDetection']) if (typeof p[k] === 'boolean') patch[k] = p[k];
     store.set(patch);
     if (typeof p.autostart === 'boolean') setAutostart(p.autostart);
     if ('gameDetection' in patch) { if (patch.gameDetection) setTimeout(scanGames, 500); else setGame(null); }
+    if ('musicDetection' in patch) { if (patch.musicDetection) { musicRestarts = []; startMusic(); } else stopMusic(); }
     buildTrayMenu();
     return publicSettings();
   });
 
   /* ---------- start ---------- */
   app.on('before-quit', () => { quitting = true; store.flushNow(); });
-  app.on('will-quit', () => { try { if (hookOn) hook.stop(); } catch {} });
+  app.on('will-quit', () => { try { if (hookOn) hook.stop(); } catch {} try { if (musicProc) musicProc.kill(); } catch {} });
   app.on('window-all-closed', () => { if (process.platform !== 'darwin' && quitting) app.quit(); });
   app.on('activate', showWindow);
 
@@ -541,6 +590,7 @@ function main() {
     const link = findDeepLinkArg(process.argv);
     if (link) handleDeepLink(link);
     startGameDetection();
+    setTimeout(startMusic, 6000);
     setupUpdater();
   });
 }
