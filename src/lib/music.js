@@ -1,5 +1,5 @@
 'use strict';
-/* „Czego słuchasz” — Spotify na tym komputerze (GibCord 1.0.5).
+/* „Czego słuchasz” — Spotify na tym komputerze (GibCord 1.0.6).
    Jeden lekki proces PowerShell co 4 s wypisuje (UTF-8, JSON w linii), co gra:
    1) przez systemowe sterowanie multimediami Windows (to samo, co pokazuje się przy przyciskach głośności):
       tytuł, wykonawca, album, pauza, pozycja i długość utworu — dokładnie;

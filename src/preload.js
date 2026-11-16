@@ -34,7 +34,7 @@ if (info) {
     onWindowState: cb => listen('window', cb),
     /** cb({ id, name, startedAt } | null) — wykryta gra. */
     onGame: cb => listen('game', cb),
-    /** cb({ artists, title, album?, startedAt?, durationMs? } | null) — co gra w Spotify na tym komputerze (1.0.5). */
+    /** cb({ artists, title, album?, startedAt?, durationMs? } | null) — co gra w Spotify na tym komputerze (1.0.6). */
     onMusic: cb => listen('music', cb),
     /** { game, music, update, settings, window } */
     getState: () => ipcRenderer.invoke('state'),

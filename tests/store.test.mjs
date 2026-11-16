@@ -93,12 +93,22 @@ const updater = Object.assign(new EventEmitter(), { checks: 0, async checkForUpd
 let tasklistOut = '"explorer.exe","1","Console","1","1 K"';
 const fakeExecFile = (cmd, args, opts, cb) => { setImmediate(() => cb(null, args.includes('/v') ? '"javaw.exe","7","Console","1","9 K","Running","PC\\\\u","0:00:01","Minecraft 1.21"' : tasklistOut)); };
 
+/* pomocnik muzyki (PowerShell): atrapa — prawdziwy powershell.exe trzymałby test na Windows bez końca */
+const spawned = [];
+const fakeSpawn = (cmd, args, opts) => {
+  const ch = new EventEmitter();
+  ch.stdout = Object.assign(new EventEmitter(), { setEncoding() {} });
+  ch.stderr = new EventEmitter();
+  ch.cmd = cmd; ch.kill = () => { setImmediate(() => ch.emit('exit', null)); };
+  spawned.push(ch);
+  return ch;
+};
 const origLoad = Module._load;
 Module._load = function (request, parent, isMain) {
   if (request === 'electron') return electron;
   if (request === 'uiohook-napi') return { uIOhook: hook, UiohookKey };
   if (request === 'electron-updater') return { autoUpdater: updater };
-  if (request === 'child_process' && parent && parent.filename === MAIN) return { ...origLoad.call(this, request, parent, isMain), execFile: fakeExecFile };
+  if (request === 'child_process' && parent && parent.filename === MAIN) return { ...origLoad.call(this, request, parent, isMain), execFile: fakeExecFile, spawn: fakeSpawn };
   return origLoad.apply(this, arguments);
 };
 

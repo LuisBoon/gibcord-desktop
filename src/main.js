@@ -449,6 +449,8 @@ function main() {
       child = spawn('powershell.exe', music.helperArgs(), { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, GIBCORD_PARENT_PID: String(process.pid) } });
     } catch (e) { log.warn('Muzyka: nie da się uruchomić PowerShell', e.message); return; }
     musicProc = child;
+    // pomocnik nie trzyma procesu przy życiu (Electron i tak decyduje sam; w testach node by czekał bez końca)
+    try { child.unref(); child.stdout.unref?.(); child.stderr.unref?.(); } catch {}
     let buf = '';
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', d => {

@@ -89,5 +89,9 @@ test('music: pomocnik PowerShell działa na Windows', { skip: process.platform !
     assert.equal(typeof sample, 'object');
     assert.equal(music.parseSample(sample), null, 'na maszynie do budowania nic nie gra');
     assert.ok(!/Exception|CategoryInfo|FullyQualifiedErrorId/.test(err), `błąd PowerShell: ${err.slice(0, 2000)}`);
-  } finally { child.kill(); }
+  } finally {
+    child.kill();
+    child.stdout.destroy(); child.stderr.destroy(); // na Windows otwarte potoki potrafią trzymać proces testów
+    await Promise.race([new Promise(r => child.exitCode != null || child.signalCode != null ? r() : child.once('exit', r)), new Promise(r => setTimeout(r, 5000))]);
+  }
 });
