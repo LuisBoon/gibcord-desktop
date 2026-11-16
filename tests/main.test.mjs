@@ -41,6 +41,8 @@ class BrowserWindow extends EventEmitter {
   setTitleBarOverlay(o) { this.tbo = o; } setBackgroundColor(c) { this.bgc = c; }
   setOverlayIcon(img, desc) { this.overlay = img ? img.path : null; this.overlayDesc = desc; }
   loadURL(u) { this.loaded.push(u); } loadFile(f, o) { this.loaded.push({ file: f, query: o && o.query }); }
+  setAlwaysOnTop(on, level) { this.aot = [on, level]; } setIgnoreMouseEvents(v) { this.ignoreMouse = v; }
+  showInactive() { this.visible = true; this.inactive = true; } setBounds(b) { this.bounds = b; }
   close() { const e = ev(); this.emit('close', e); if (!e.defaultPrevented) { this.destroyed = true; this.emit('closed'); } }
 }
 let tray = null;
@@ -83,7 +85,8 @@ const electron = {
     { id: 'screen:0:0', name: 'Entire screen', thumbnail: { isEmpty: () => false, toDataURL: () => 'data:image/png;base64,AA' }, appIcon: null },
     { id: 'window:42:0', name: 'VALORANT', thumbnail: { isEmpty: () => false, toDataURL: () => 'data:image/png;base64,BB' }, appIcon: { isEmpty: () => false, toDataURL: () => 'data:image/png;base64,CC' } },
   ] },
-  screen: { getAllDisplays: () => [{ workArea: { x: 0, y: 0, width: 1920, height: 1080 } }] },
+  screen: Object.assign(new EventEmitter(), { getAllDisplays: () => [{ workArea: { x: 0, y: 0, width: 1920, height: 1080 } }], getPrimaryDisplay: () => ({ bounds: { x: 0, y: 0, width: 1920, height: 1080 }, workArea: { x: 0, y: 0, width: 1920, height: 1040 } }) }),
+  globalShortcut: { keys: new Map(), register(k, fn) { this.keys.set(k, fn); return true; }, unregister(k) { this.keys.delete(k); }, unregisterAll() { this.keys.clear(); } },
   clipboard: { writeText() {} },
   Notification: Object.assign(class extends EventEmitter { show() {} }, { isSupported: () => true }),
 };
@@ -195,7 +198,7 @@ test('proces główny GibCorda (atrapa Electrona, Windows)', async t => {
     const other = new WebContents(); const e3 = { sender: other, senderFrame: { url: ORIGIN } }; ipcMain.emit('app:info', e3); assert.equal(e3.returnValue, null);
     assert.equal(await handlers.get('settings:get')(fromApp('file:///C:/x/offline.html')), null);
     const s = await handlers.get('settings:get')(fromApp());
-    assert.deepEqual(s, { autostart: true, autostartAvailable: true, startMinimized: true, closeToTray: true, gameDetection: true, gameDetectionAvailable: true, musicDetection: true, musicDetectionAvailable: true, store: false });
+    assert.deepEqual(s, { autostart: true, autostartAvailable: true, startMinimized: true, closeToTray: true, gameDetection: true, gameDetectionAvailable: true, musicDetection: true, musicDetectionAvailable: true, overlay: true, overlayMode: 'game', overlayCorner: 'tl', overlaySize: 'm', overlayHotkey: 'Ctrl + Shift + O', overlayAvailable: true, store: false });
   });
 
   await t.test('pasek okna w kolorze motywu: przyciski systemowe, kolor ze strony, powiększenie', () => {
@@ -360,6 +363,46 @@ test('proces główny GibCorda (atrapa Electrona, Windows)', async t => {
     assert.equal(spawned.length, 1, 'po wyłączeniu nie wstaje sam');
     await handlers.get('settings:set')(fromApp(), { musicDetection: true });
     assert.equal(spawned.length, 2, 'włączenie uruchamia pomocnika od nowa');
+  });
+
+  await t.test('nakładka w grze: okno, dane, skrót, rogi, tylko w grze', async () => {
+    const gs = electron.globalShortcut;
+    assert.ok(gs.keys.has('CommandOrControl+Shift+O'), 'skrót zarejestrowany przy starcie');
+    const n0 = windows.length;
+    const st = { on: true, channel: 'Pogadanki · Ekipa', members: [
+      { id: 1, name: 'Ola', avatar: ORIGIN + '/uploads/a.png', color: '#f49ac1', initial: 'O', talking: true },
+      { id: 2, name: 'Kuba', avatar: 'https://zly.example/x.png', color: '#6fe3a5', initial: 'K', muted: true }] };
+    ipcMain.emit('overlay:state', fromApp(), st);
+    assert.equal(windows.length, n0, 'tylko w grze — gry brak, okna nie ma');
+    ipcMain.emit('overlay:state', { sender: new WebContents(), senderFrame: { url: ORIGIN + '/' } }, st);
+    await handlers.get('settings:set')(fromApp(), { overlayMode: 'always' });
+    const ov = windows[windows.length - 1];
+    assert.equal(windows.length, n0 + 1, 'zawsze w rozmowie — okno nakładki');
+    assert.equal(ov.opts.transparent, true); assert.equal(ov.opts.focusable, false); assert.equal(ov.opts.skipTaskbar, true); assert.equal(ov.opts.frame, false);
+    assert.equal(ov.opts.webPreferences.sandbox, true); assert.equal(ov.opts.webPreferences.contextIsolation, true);
+    assert.equal(ov.ignoreMouse, true, 'klikanie przechodzi do gry'); assert.deepEqual(ov.aot, [true, 'screen-saver']);
+    assert.equal(ov.inactive, true, 'bez zabierania fokusu grze');
+    assert.ok(String(ov.loaded[0].file).endsWith('overlay.html'));
+    assert.deepEqual(ov.bounds, { x: 16, y: 16, width: 300, height: 440 });
+    ipcMain.emit('overlay:ready', { sender: ov.webContents });
+    const p = ov.webContents.lastSent('overlay');
+    assert.equal(p.state.members[0].avatar, ORIGIN + '/uploads/a.png'); assert.equal(p.state.members[1].avatar, null, 'obcy awatar odrzucony');
+    assert.equal(p.corner, 'tl'); assert.equal(p.scale, 1);
+    gs.keys.get('CommandOrControl+Shift+O')(); assert.equal(ov.visible, false, 'skrót chowa');
+    gs.keys.get('CommandOrControl+Shift+O')(); assert.equal(ov.visible, true, 'i pokazuje');
+    await handlers.get('settings:set')(fromApp(), { overlayCorner: 'br', overlaySize: 'l' });
+    assert.deepEqual(ov.bounds, { x: 1920 - 375 - 16, y: 1080 - 550 - 16, width: 375, height: 550 });
+    assert.equal(ov.webContents.lastSent('overlay').scale, 1.25);
+    const s = await handlers.get('settings:get')(fromApp());
+    assert.equal(s.overlay, true); assert.equal(s.overlayMode, 'always'); assert.equal(s.overlayCorner, 'br'); assert.equal(s.overlayAvailable, true);
+    ipcMain.emit('overlay:state', fromApp(), { on: false });
+    assert.equal(ov.visible, false, 'koniec rozmowy — nakładka znika');
+    await handlers.get('settings:set')(fromApp(), { overlayMode: 'game' });
+    ipcMain.emit('overlay:state', fromApp(), st);
+    assert.equal(ov.visible, false, 'tylko w grze — dalej schowana');
+    await handlers.get('settings:set')(fromApp(), { overlay: false });
+    assert.equal(gs.keys.has('CommandOrControl+Shift+O'), false, 'wyłączona — skrót zwolniony');
+    assert.equal(windows.length, n0 + 1, 'jedno okno nakładki na całe życie aplikacji');
   });
 
   await t.test('zamknięcie chowa do zasobnika (raz dymek), stan okna idzie do strony', async () => {

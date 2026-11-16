@@ -4,7 +4,7 @@
  * a do tego dokłada to, czego przeglądarka nie umie: „naciśnij, by mówić” w każdej aplikacji,
  * ikonę w zasobniku, autostart, linki gibcord://, wykrywanie gier i samoczynne aktualizacje.
  */
-const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, ipcMain, shell, session, desktopCapturer, screen, clipboard, Notification } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, ipcMain, shell, session, desktopCapturer, screen, clipboard, Notification, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execFile, spawn } = require('child_process');
@@ -14,6 +14,7 @@ const { parseDeepLink, findDeepLinkArg } = require('./lib/deeplink');
 const { resolveBinding, matches } = require('./lib/keymap');
 const games = require('./lib/games');
 const music = require('./lib/music');
+const overlay = require('./lib/overlay');
 const { originOf, isAllowedOrigin, appPathFor } = require('./lib/origins');
 
 /* ---------- adres ---------- */
@@ -426,6 +427,7 @@ function main() {
     currentGame = next;
     log.info(next ? `Gra: ${next.name}` : 'Gra: brak');
     send('game', currentGame);
+    ovUpdate(); // „tylko w grze”: nakładka pojawia się i znika razem z grą
   }
   function startGameDetection() {
     if (!IS_WIN || gameTimer) return;
@@ -481,6 +483,49 @@ function main() {
     if (p) try { p.kill(); } catch {}
     setMusic(tracker.reset());
   }
+
+  /* ---------- nakładka w grze (lib/overlay.js) ---------- */
+  let ovWin = null, ovState = null, ovReady = false, ovHidden = false, ovShortcut = false;
+  const ovPayload = () => { const s = store.get(); return { state: ovState, corner: s.overlayCorner, scale: overlay.SIZES[s.overlaySize] || 1 }; };
+  const ovDisplay = () => { try { return screen.getPrimaryDisplay(); } catch { return null; } };
+  function ovEnsure() {
+    if (ovWin && !ovWin.isDestroyed()) return ovWin;
+    const s = store.get();
+    ovReady = false;
+    ovWin = new BrowserWindow({
+      ...overlay.overlayBounds(ovDisplay(), s.overlayCorner, s.overlaySize), show: false, title: 'GibCord — nakładka',
+      frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: false, skipTaskbar: true, focusable: false, alwaysOnTop: true,
+      resizable: false, movable: false, minimizable: false, maximizable: false, fullscreenable: false,
+      webPreferences: { preload: path.join(__dirname, 'overlay-preload.js'), partition: 'persist:gibcord', contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: false, backgroundThrottling: false },
+    });
+    ovWin.setAlwaysOnTop(true, 'screen-saver'); // nad grami „pełny ekran w oknie”
+    ovWin.setIgnoreMouseEvents(true);           // klikanie przechodzi do gry
+    ovWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    ovWin.webContents.on('will-navigate', e => e.preventDefault());
+    ovWin.on('closed', () => { ovWin = null; ovReady = false; });
+    ovWin.loadFile(path.join(__dirname, 'overlay.html'));
+    return ovWin;
+  }
+  function ovUpdate() {
+    const s = store.get();
+    const show = IS_WIN && overlay.shouldShow({ enabled: s.overlay, mode: s.overlayMode, state: ovState, game: currentGame, hidden: ovHidden });
+    if (!show) { if (ovWin && !ovWin.isDestroyed() && ovWin.isVisible()) ovWin.hide(); return; }
+    const w = ovEnsure();
+    w.setBounds(overlay.overlayBounds(ovDisplay(), s.overlayCorner, s.overlaySize));
+    if (ovReady) w.webContents.send('overlay', ovPayload());
+    if (!w.isVisible()) { w.showInactive(); w.setAlwaysOnTop(true, 'screen-saver'); }
+  }
+  function ovHotkey() {
+    const want = IS_WIN && store.get().overlay;
+    try {
+      if (want && !ovShortcut) {
+        ovShortcut = globalShortcut.register(overlay.HOTKEY, () => { ovHidden = !ovHidden; log.info(ovHidden ? 'Nakładka schowana skrótem' : 'Nakładka pokazana skrótem'); ovUpdate(); });
+        if (!ovShortcut) log.warn(`Nakładka: skrót ${overlay.HOTKEY} zajęty przez inny program`);
+      } else if (!want && ovShortcut) { globalShortcut.unregister(overlay.HOTKEY); ovShortcut = false; ovHidden = false; }
+    } catch (e) { log.warn('Nakładka: skrót', e.message); }
+  }
+  ipcMain.on('overlay:ready', e => { if (ovWin && !ovWin.isDestroyed() && e.sender === ovWin.webContents) { ovReady = true; ovWin.webContents.send('overlay', ovPayload()); } });
+  ipcMain.on('overlay:state', (e, st) => { if (!fromApp(e)) return; ovState = overlay.sanitizeState(st, allowed); ovUpdate(); });
 
   /* ---------- aktualizacje ---------- */
   let updater = null;
@@ -560,23 +605,27 @@ function main() {
   ipcMain.handle('state', e => fromApp(e) ? { game: currentGame, music: currentMusic, update: { ...update }, settings: publicSettings(), window: winState() } : null);
   ipcMain.handle('update:check', e => fromApp(e) ? checkUpdates(true) : null);
   ipcMain.on('update:install', e => { if (fromApp(e)) installUpdate(); });
-  function publicSettings() { const s = store.get(); return { autostart: autostartOn(), autostartAvailable: app.isPackaged && !IS_STORE, store: IS_STORE, startMinimized: s.startMinimized, closeToTray: s.closeToTray, gameDetection: s.gameDetection, gameDetectionAvailable: IS_WIN, musicDetection: s.musicDetection, musicDetectionAvailable: IS_WIN }; }
+  function publicSettings() { const s = store.get(); return { autostart: autostartOn(), autostartAvailable: app.isPackaged && !IS_STORE, store: IS_STORE, startMinimized: s.startMinimized, closeToTray: s.closeToTray, gameDetection: s.gameDetection, gameDetectionAvailable: IS_WIN, musicDetection: s.musicDetection, musicDetectionAvailable: IS_WIN, overlay: s.overlay, overlayMode: s.overlayMode, overlayCorner: s.overlayCorner, overlaySize: s.overlaySize, overlayHotkey: 'Ctrl + Shift + O', overlayAvailable: IS_WIN }; }
   ipcMain.handle('settings:get', e => fromApp(e) ? publicSettings() : null);
   ipcMain.handle('settings:set', (e, p) => {
     if (!fromApp(e) || !p || typeof p !== 'object') return null;
     const patch = {};
-    for (const k of ['startMinimized', 'closeToTray', 'gameDetection', 'musicDetection']) if (typeof p[k] === 'boolean') patch[k] = p[k];
+    for (const k of ['startMinimized', 'closeToTray', 'gameDetection', 'musicDetection', 'overlay']) if (typeof p[k] === 'boolean') patch[k] = p[k];
+    if (overlay.MODES.includes(p.overlayMode)) patch.overlayMode = p.overlayMode;
+    if (overlay.CORNERS.includes(p.overlayCorner)) patch.overlayCorner = p.overlayCorner;
+    if (p.overlaySize in overlay.SIZES) patch.overlaySize = p.overlaySize;
     store.set(patch);
     if (typeof p.autostart === 'boolean') setAutostart(p.autostart);
     if ('gameDetection' in patch) { if (patch.gameDetection) setTimeout(scanGames, 500); else setGame(null); }
     if ('musicDetection' in patch) { if (patch.musicDetection) { musicRestarts = []; startMusic(); } else stopMusic(); }
+    if (['overlay', 'overlayMode', 'overlayCorner', 'overlaySize'].some(k => k in patch)) { ovHotkey(); ovUpdate(); }
     buildTrayMenu();
     return publicSettings();
   });
 
   /* ---------- start ---------- */
   app.on('before-quit', () => { quitting = true; store.flushNow(); });
-  app.on('will-quit', () => { try { if (hookOn) hook.stop(); } catch {} try { if (musicProc) musicProc.kill(); } catch {} });
+  app.on('will-quit', () => { try { if (hookOn) hook.stop(); } catch {} try { if (musicProc) musicProc.kill(); } catch {} try { globalShortcut.unregisterAll(); } catch {} });
   app.on('window-all-closed', () => { if (process.platform !== 'darwin' && quitting) app.quit(); });
   app.on('activate', showWindow);
 
@@ -593,6 +642,8 @@ function main() {
     if (link) handleDeepLink(link);
     startGameDetection();
     setTimeout(startMusic, 6000);
+    ovHotkey();
+    try { screen.on('display-metrics-changed', ovUpdate); screen.on('display-removed', ovUpdate); } catch {}
     setupUpdater();
   });
 }

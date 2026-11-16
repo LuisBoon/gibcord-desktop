@@ -13,7 +13,7 @@ function isAllowedOrigin(url, origins) {
 }
 
 /* Ścieżki, które obsługuje sama strona (SPA) — takie linki otwieramy w oknie aplikacji, a nie w nowym oknie. */
-const APP_PATHS = [/^\/$/, /^\/kanal\/\d+\/\d+$/, /^\/serwer\/\d+$/, /^\/dm\/\d+$/, /^\/wydarzenia\/\d+$/, /^\/i\/[A-Za-z0-9]{4,32}$/, /^\/admin$/];
+const APP_PATHS = [/^\/$/, /^\/kanal\/\d+\/\d+$/, /^\/serwer\/\d+$/, /^\/dm\/\d+$/, /^\/wydarzenia\/\d+$/, /^\/i\/[A-Za-z0-9]{4,32}$/, /^\/admin(\/[a-z0-9]{1,24}){0,4}$/]; // panel admina z działami i pocztą (/admin/poczta/1/odebrane/5)
 
 /** Dla linku do GibCorda zwraca ścieżkę w aplikacji ('/kanal/1/2') albo null (np. /uploads/…, /api/…). */
 function appPathFor(url, origins) {

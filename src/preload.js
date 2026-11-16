@@ -36,12 +36,14 @@ if (info) {
     onGame: cb => listen('game', cb),
     /** cb({ artists, title, album?, startedAt?, durationMs? } | null) — co gra w Spotify na tym komputerze (1.0.6). */
     onMusic: cb => listen('music', cb),
+    /** Nakładka w grze (1.0.7): { on, channel, members: [{ id, name, avatar, color, initial, talking, muted, deaf }] } */
+    setOverlay: st => ipcRenderer.send('overlay:state', st && typeof st === 'object' ? JSON.parse(JSON.stringify(st)) : null),
     /** { game, music, update, settings, window } */
     getState: () => ipcRenderer.invoke('state'),
     checkUpdates: () => ipcRenderer.invoke('update:check'),
     installUpdate: () => ipcRenderer.send('update:install'),
     getSettings: () => ipcRenderer.invoke('settings:get'),
-    /** { autostart?, startMinimized?, closeToTray?, gameDetection?, musicDetection? } → nowe ustawienia */
+    /** { autostart?, startMinimized?, closeToTray?, gameDetection?, musicDetection?, overlay?, overlayMode?, overlayCorner?, overlaySize? } → nowe ustawienia */
     setSettings: p => ipcRenderer.invoke('settings:set', p && typeof p === 'object' ? { ...p } : {}),
   }));
 }

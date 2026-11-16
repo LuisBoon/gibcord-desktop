@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; script-src file:">
+<title>GibCord — nakładka</title>
+<style>
+/* Wariant A: nazwa kanału, pod nią osoby; kto mówi — zielona obwódka. Tło okna przezroczyste, klikanie przechodzi do gry. */
+:root{--k:1;--bg:rgba(18,13,34,.74);--talk:#3ddc84;--talkbg:rgba(16,42,28,.82);--red:#ff6b81;--tx:#fff}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:transparent;overflow:hidden}
+body{font:600 calc(13.5px * var(--k))/1.2 'Segoe UI',system-ui,sans-serif;color:var(--tx);user-select:none;-webkit-user-select:none;cursor:default;
+  display:flex;flex-direction:column;gap:calc(5px * var(--k));padding:2px;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+body.cb{justify-content:flex-end}
+body.cr{align-items:flex-end}
+[hidden]{display:none!important}
+#list{display:flex;flex-direction:column;align-items:flex-start;gap:calc(5px * var(--k));width:100%;min-width:0}
+body.cr #list{align-items:flex-end}
+.ch{display:flex;align-items:center;gap:calc(6px * var(--k));padding:calc(4px * var(--k)) calc(9px * var(--k));border-radius:calc(9px * var(--k));background:var(--bg);font-size:calc(12px * var(--k));color:rgba(255,255,255,.78);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r{display:flex;align-items:center;gap:calc(8px * var(--k));padding:calc(3px * var(--k)) calc(11px * var(--k)) calc(3px * var(--k)) calc(3px * var(--k));border-radius:999px;background:var(--bg);max-width:100%;transition:background .15s}
+.r.t{background:var(--talkbg)}
+.r.q{opacity:.72}
+.r span.n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.av{width:calc(28px * var(--k));height:calc(28px * var(--k));border-radius:50%;flex:none;position:relative;display:grid;place-items:center;font-weight:800;font-size:calc(12px * var(--k));color:#2a1630;transition:box-shadow .12s}
+.av img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
+.r.t .av{box-shadow:0 0 0 calc(2.5px * var(--k)) var(--talk)}
+.ic{width:calc(15px * var(--k));height:calc(15px * var(--k));stroke:var(--red);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.sp{width:calc(13px * var(--k));height:calc(13px * var(--k));stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.more{font-size:calc(11.5px * var(--k));color:rgba(255,255,255,.75);padding:calc(3px * var(--k)) calc(9px * var(--k));border-radius:calc(9px * var(--k));background:var(--bg);width:max-content}
+</style>
+</head>
+<body>
+<div class="ch" id="ch" hidden></div>
+<div id="list"></div>
+<div class="more" id="more" hidden></div>
+<script src="overlay.js"></script>
+</body>
+</html>

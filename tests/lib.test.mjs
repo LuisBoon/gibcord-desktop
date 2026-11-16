@@ -96,6 +96,10 @@ test('origins: nowy i stary adres GibCorda', () => {
   assert.equal(appPathFor('https://dc.luisboon.pl/i/AbCd12', O), '/i/AbCd12');
   assert.equal(appPathFor('https://gibcord.luisboon.pl/', O), '/');
   assert.equal(appPathFor('https://gibcord.luisboon.pl/uploads/a/b.png', O), null);
+  assert.equal(appPathFor('https://gibcord.luisboon.pl/admin/poczta/1/odebrane/55', O), '/admin/poczta/1/odebrane/55', 'link z powiadomienia o mailu otwiera się w aplikacji');
+  assert.equal(appPathFor('https://gibcord.luisboon.pl/admin/uzytkownicy', O), '/admin/uzytkownicy');
+  assert.equal(appPathFor('https://gibcord.luisboon.pl/admin/a/b/c/d/e', O), null);
+  assert.equal(appPathFor('https://gibcord.luisboon.pl/admin/../api/x', O), null);
   assert.equal(appPathFor('https://gibcord.luisboon.pl/api/state', O), null);
   assert.equal(appPathFor('https://evil.example/kanal/1/2', O), null);
 });
