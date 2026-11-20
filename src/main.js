@@ -15,6 +15,7 @@ const { resolveBinding, matches } = require('./lib/keymap');
 const games = require('./lib/games');
 const music = require('./lib/music');
 const overlay = require('./lib/overlay');
+const migration = require('./lib/migrate');
 const { originOf, isAllowedOrigin, appPathFor } = require('./lib/origins');
 
 /* ---------- adres ---------- */
@@ -566,6 +567,23 @@ function main() {
     setImmediate(() => updater.quitAndInstall(true, true));
   }
 
+  /* ---------- przesiadka na GibCord 6 (aplikacja natywna) — włącza ją serwer ---------- */
+  let migrating = false;
+  async function checkMigration() {
+    if (migrating || !IS_WIN || IS_STORE || !app.isPackaged) return;
+    if (voice.inCall) { log.info('Przesiadka: poczekam, aż skończy się rozmowa'); return; }
+    migrating = true;
+    try {
+      const done = await migration.migrate({
+        ses: session.fromPartition('persist:gibcord'), origin: ORIGIN, log, tmpDir: app.getPath('temp'), execPath: process.execPath,
+        isWin: IS_WIN, isStore: IS_STORE, packaged: app.isPackaged, setAutostart,
+        notify: (title, body) => { try { if (Notification.isSupported()) new Notification({ title, body, icon: asset('icon.png') }).show(); } catch {} },
+      });
+      if (done) { quitting = true; store.flushNow(); setTimeout(() => app.quit(), 1500); return; }
+    } catch (e) { log.warn('Przesiadka nieudana — zostaję przy starej aplikacji', e && e.message); }
+    migrating = false;
+  }
+
   /* ---------- komunikacja ze stroną (preload) ---------- */
   ipcMain.on('app:info', e => { e.returnValue = fromApp(e) ? { version: app.getVersion(), platform: process.platform, arch: process.arch, packaged: app.isPackaged, titleBar: TITLEBAR } : null; });
   // pasek okna: GibCord i strona „brak połączenia” w głównym oknie
@@ -645,5 +663,7 @@ function main() {
     ovHotkey();
     try { screen.on('display-metrics-changed', ovUpdate); screen.on('display-removed', ovUpdate); } catch {}
     setupUpdater();
+    setTimeout(checkMigration, 45e3);
+    setInterval(checkMigration, 30 * 60e3);
   });
 }
