@@ -44,7 +44,7 @@ function waitExit(child, ms) {
  * deps: { ses, origin, log, notify, tmpDir, execPath, isWin, isStore, packaged, setAutostart, env }
  */
 async function migrate(deps) {
-  const { ses, origin, log, notify = () => {}, tmpDir, execPath, setAutostart = () => {}, env = process.env } = deps;
+  const { ses, origin, log, notify = () => {}, tmpDir, execPath, setAutostart = () => {}, env = process.env, run = spawn } = deps;
   const info = await (await ses.fetch(origin + '/api/info', { cache: 'no-store' })).json();
   const n = shouldMigrate(info, deps);
   if (!n) return false;
@@ -73,10 +73,10 @@ async function migrate(deps) {
     if (buf.length < 1e6) throw new Error('instalator za mały (' + buf.length + ' B)');
     const setup = path.join(tmpDir, 'GibCord6-Setup.exe');
     fs.writeFileSync(setup, buf);
-    await waitExit(spawn(setup, [], { stdio: 'ignore', windowsHide: false }), 10 * 60e3);
+    await waitExit(run(setup, [], { stdio: 'ignore', windowsHide: false }), 10 * 60e3);
     if (!fs.existsSync(exe)) throw new Error('po instalacji brak ' + exe);
   } else {
-    const c = spawn(exe, [], { detached: true, stdio: 'ignore' });
+    const c = run(exe, [], { detached: true, stdio: 'ignore' }); // błąd uruchomienia = przerywamy, stara aplikacja zostaje
     c.on('error', e => log.warn('Przesiadka: uruchomienie nowej aplikacji', e && e.message));
     c.unref();
   }
@@ -86,7 +86,7 @@ async function migrate(deps) {
   const uninst = path.join(path.dirname(execPath), 'Uninstall GibCord.exe');
   if (fs.existsSync(uninst)) {
     try {
-      const u = spawn(uninst, ['/S'], { detached: true, stdio: 'ignore' });
+      const u = run(uninst, ['/S'], { detached: true, stdio: 'ignore' });
       u.on('error', e => log.warn('Przesiadka: odinstalowanie', e && e.message));
       u.unref();
     } catch (e) { log.warn('Przesiadka: odinstalowanie', e && e.message); }

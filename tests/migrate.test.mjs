@@ -41,14 +41,28 @@ test('przesiadka: gdy nowa aplikacja już jest — kod logowania na dysk, autost
   } };
   let auto = null;
   const log = { info() {}, warn() {} };
-  // uruchomienie istniejącego exe — w teście pusty plik; spawn może się nie udać na Linuksie, więc podmieniamy na „/bin/true”
-  const done = await migrate({ ses, origin: 'https://gc.test', log, tmpDir: base, execPath: join(base, 'stara', 'GibCord.exe'), ...on, setAutostart: v => { auto = v; }, env: { LOCALAPPDATA: base } }).catch(e => e);
-  assert.equal(done instanceof Error ? done.message : done, true);
+  const started = [];
+  const run = (cmd, args) => { started.push([cmd, ...args]); return { on() {}, unref() {} }; };
+  const done = await migrate({ ses, origin: 'https://gc.test', log, tmpDir: base, execPath: join(base, 'stara', 'GibCord.exe'), ...on, setAutostart: v => { auto = v; }, env: { LOCALAPPDATA: base }, run });
+  assert.equal(done, true);
+  assert.deepEqual(started, [[exe]], 'uruchamia nową aplikację (starej nie odinstalowuje, bo w teście nie ma deinstalatora)');
   assert.equal(auto, false);
   const h = JSON.parse(readFileSync(join(base, 'GibCord6-dane', 'przesiadka.json'), 'utf8'));
   assert.equal(h.code, 'a'.repeat(48));
   assert.equal(h.server, 'https://gc.test');
   assert.ok(!calls.some(u => u.includes('example.com')), 'nie powinien pobierać instalatora');
+});
+
+test('przesiadka: nie da się uruchomić nowej aplikacji → przerywamy, stara zostaje', async () => {
+  const base = mkdtempSync(join(tmpdir(), 'gc-mig-'));
+  const exe = nativeExe({ LOCALAPPDATA: base });
+  mkdirSync(join(base, 'GibCord6', 'current'), { recursive: true });
+  writeFileSync(exe, '');
+  const ses = { fetch: async url => url.endsWith('/api/info') ? { ok: true, json: async () => info({ version: '6', setupUrl: 'https://x/s.exe', migrate: true }) } : { ok: false } };
+  let auto = null;
+  const run = () => { throw Object.assign(new Error('spawn EFTYPE'), { code: 'EFTYPE' }); };
+  await assert.rejects(migrate({ ses, origin: 'https://gc.test', log: { info() {}, warn() {} }, tmpDir: base, execPath: '/x', ...on, setAutostart: v => { auto = v; }, env: { LOCALAPPDATA: base }, run }));
+  assert.equal(auto, null, 'autostart starej aplikacji zostaje');
 });
 
 test('przesiadka: serwer nie każe → nic nie robi', async () => {
